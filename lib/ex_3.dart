@@ -69,7 +69,7 @@ class EBook extends MediaItem with Downloadable {
 }
 
 class ShoppingCart {
-  List<MediaItem> _items = [];
+  final List<MediaItem> _items = [];
 
   void addItem(MediaItem item) {
     _items.add(item);
@@ -99,13 +99,16 @@ class ShoppingCart {
       print(item.getDetails());
 
       if (item is Downloadable) {
-        item.download(item.title);
+        Downloadable downloadableItem = item as Downloadable;
+        downloadableItem.download(item.title);
       }
 
       print("");
     }
 
-    print("Total with tax: ${calculateTotalWithTax()} ₸");
+    print(
+      "Total with tax: ${calculateTotalWithTax().toStringAsFixed(2)} ₸",
+    );
   }
 }
 
@@ -145,7 +148,8 @@ void main() {
   print("");
   print("===== ITEMS UNDER 5000 ₸ =====");
 
-  List<MediaItem> cheapItems = cart.filterByMaxPrice(5000.0);
+  List<MediaItem> cheapItems =
+  cart.filterByMaxPrice(5000.0);
 
   for (MediaItem item in cheapItems) {
     print(item.getDetails());

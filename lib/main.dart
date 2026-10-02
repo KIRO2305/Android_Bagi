@@ -1,130 +1,164 @@
+import 'package:flutter/material.dart';
+
 void main() {
-  // TASK 1
-  // Multiplication table 1-10
+  runApp(const MyApp());
+}
 
-  for (int digit = 1; digit <= 10; digit++) {
-    print("MULTIPLICATION TABLE for digit $digit");
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
-    for (int i = 1; i <= 10; i++) {
-      print("$digit * $i = ${digit * i}");
-    }
-    print("");
-  }
-
-  // TASK 2
-  // Next day
-
-  int day = 28;
-  int month = 2;
-  int year = 2026;
-
-  bool isLeapYear =
-      year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
-ч
-  int daysInMonth;
-
-  if (month == 2) {
-    daysInMonth = isLeapYear ? 29 : 28;
-  } else if (month == 4 ||
-      month == 6 ||
-      month == 9 ||
-      month == 11) {
-    daysInMonth = 30;
-  } else {
-    daysInMonth = 31;
-  }
-  if (day < 1 || day > daysInMonth) {
-    print("Invalid date");
-  } else {
-    day++;
-    if (day > daysInMonth) {
-      day = 1;
-      month++;
-
-      if (month > 12) {
-        month = 1;
-        year++;
-      }
-    }
-
-    print(
-      "${day.toString().padLeft(2, '0')}."
-          "${month.toString().padLeft(2, '0')}.$year",
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: const ProfileCardPage(),
     );
   }
+}
 
-  // TASK 3
-  // Vowel Counter
+class ProfileCardPage extends StatefulWidget {
+  const ProfileCardPage({super.key});
 
-  String text = "flutter mobile development";
-  int vowelCount = 0;
+  @override
+  State<ProfileCardPage> createState() => _ProfileCardPageState();
+}
 
-  for (int i = 0; i < text.length; i++) {
-    String letter = text[i].toLowerCase();
+class _ProfileCardPageState extends State<ProfileCardPage> {
+  bool isFollowing = false;
+  bool isLiked = false;
 
-    if ("aeiou".contains(letter)) {
-      vowelCount++;
-    }
+  int likes = 120;
+
+  void toggleFollow() {
+    setState(() {
+      isFollowing = !isFollowing;
+    });
   }
 
-  print("Vowels: $vowelCount");
-
-  // TASK 4
-  // Manual min & max finder
-
-  List<int> numbers = [14, 88, 3, 42, 99, 12, 67];
-  List<int> numbers1 = [234, 34, 123, 44, 949, 112, 67];
-
-  int min = numbers[0];
-  int max = numbers[0];
-
-  for (int number in numbers) {
-    if (number < min) {
-      min = number;
-    }
-
-    if (number > max) {
-      max = number;
-    }
-  }
-
-  print("numbers -> max: $max, min: $min");
-
-  int min1 = numbers1[0];
-  int max1 = numbers1[0];
-
-  for (int number in numbers1) {
-    if (number < min1) {
-      min1 = number;
-    }
-
-    if (number > max1) {
-      max1 = number;
-    }
-  }
-
-  print("numbers1 -> max: $max1, min: $min1");
-
-  // TASK 5
-  // Prime Number Checker
-
-  int number = 6;
-  bool isPrime = true;
-
-  if (number < 2) {
-    isPrime = false;
-  } else {
-    for (int i = 2; i < number; i++) {
-      if (number % i == 0) {
-        isPrime = false;
-        break;
+  void toggleLike() {
+    setState(() {
+      if (isLiked) {
+        likes--;
+      } else {
+        likes++;
       }
-    }
+
+      isLiked = !isLiked;
+    });
   }
 
-  if (isPrime) {
-    print("$number -> prime number");
-  } else {
-    print("$number -> not prime number");
+  void resetProfile() {
+    setState(() {
+      isFollowing = false;
+      isLiked = false;
+      likes = 120;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Profile Card"),
+        centerTitle: true,
+      ),
+
+      body: Center(
+        child: Card(
+          elevation: 8,
+          margin: const EdgeInsets.all(24),
+
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+
+                // Avatar
+                const CircleAvatar(
+                  radius: 50,
+                  backgroundImage: NetworkImage(
+                    "https://i.pravatar.cc/300",
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Name
+                const Text(
+                  "Bekzat",
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 5),
+
+                // Profile details
+                const Text(
+                  "Flutter Developer",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey,
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Follow button
+                ElevatedButton(
+                  onPressed: toggleFollow,
+                  child: Text(
+                    isFollowing ? "Following" : "Follow",
+                  ),
+                ),
+
+                const SizedBox(height: 15),
+
+                // Like section
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+
+                    IconButton(
+                      onPressed: toggleLike,
+
+                      icon: Icon(
+                        isLiked
+                            ? Icons.favorite
+                            : Icons.favorite_border,
+
+                        color: isLiked
+                            ? Colors.red
+                            : Colors.grey,
+
+                        size: 30,
+                      ),
+                    ),
+
+                    Text(
+                      "$likes Likes",
+                      style: const TextStyle(
+                        fontSize: 18,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 15),
+
+                // Reset button
+                OutlinedButton(
+                  onPressed: resetProfile,
+                  child: const Text("Reset"),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
