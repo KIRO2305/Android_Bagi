@@ -237,8 +237,9 @@ const List<Product> cartProducts = [
     category: 'PC',
     price: 32000,
     icon: Icons.keyboard,
-    color: Color(Colors.blue),
+    color: Color(0xFFE056FD),
   ),
+
   Product(
     id: 5,
     name: 'USB-C Hub',
