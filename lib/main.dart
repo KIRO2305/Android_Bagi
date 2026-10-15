@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 "Bagi tigr"
 "number 2"
+"number 3"
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
