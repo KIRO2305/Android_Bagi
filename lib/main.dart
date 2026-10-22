@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 "Bagi tigr"
 "number 2"
 "number 3"
+"number3"
+"NUm1"
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
