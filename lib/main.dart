@@ -5,11 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
-"Bagi tigr"
-"number 2"
-"number 3"
-"number3"
-"NUm1"
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
