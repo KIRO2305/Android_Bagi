@@ -1,28 +1,5 @@
-
 import 'package:flutter/material.dart';
-
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Registration Lab',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
-        ),
-      ),
-      home: const RegistrationScreen(),
-    );
-  }
-}
+import 'main.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -82,11 +59,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     debugPrint('Status: SUCCESS');
     debugPrint('=============================');
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Registration successful!'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 3),
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HomeScreen(userName: nameController.text.trim()),
       ),
     );
   }
