@@ -1,13 +1,19 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
-
+"Bagi tigr"
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => CartProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => CloudCartProvider()),
+      ],
       child: const StudentHubCompleteApp(),
     ),
   );
@@ -21,7 +27,7 @@ class StudentHubCompleteApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Student Hub',
+    title: 'Student Hub Bagi',
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       useMaterial3: true,
@@ -231,7 +237,7 @@ const List<Product> cartProducts = [
     category: 'PC',
     price: 32000,
     icon: Icons.keyboard,
-    color: Color(0xFF27AE60),
+    color: Color(Colors.blue),
   ),
   Product(
     id: 5,
@@ -612,6 +618,20 @@ class _StudentHubHomeState extends State<StudentHubHome> {
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const CloudProductListScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.cloud_outlined),
+            label: const Text('Cloud Store'),
+          ),
+        ),
         const SizedBox(height: 20),
         const Text(
           'Мои курсы',
@@ -837,6 +857,20 @@ class _StudentHubHomeState extends State<StudentHubHome> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const CartPage()),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.cloud_outlined, color: purple),
+                title: const Text('Cloud Store'),
+                subtitle: const Text('Lab 10 · REST API, Hero, карусель'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CloudProductListScreen(),
+                    ),
                   );
                 },
               ),
@@ -2253,6 +2287,585 @@ class _AddMoneyPageState extends State<AddMoneyPage> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+const galleryCount = 3;
+
+String usd(double v) => '\$${v.toStringAsFixed(2)}';
+
+class CloudProduct {
+  final int id;
+  final String title, description, category, imageUrl;
+  final double price, rating;
+  final int reviewCount;
+
+  const CloudProduct({
+    required this.id,
+    required this.title,
+    required this.price,
+    required this.description,
+    required this.category,
+    required this.imageUrl,
+    required this.rating,
+    required this.reviewCount,
+  });
+
+  factory CloudProduct.fromJson(Map<String, dynamic> json) {
+    final r = json['rating'];
+    final rate = r is Map ? r : const {};
+
+    return CloudProduct(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      title: (json['title'] ?? 'Без названия').toString(),
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      description: (json['description'] ?? '').toString(),
+      category: (json['category'] ?? 'other').toString(),
+      imageUrl: (json['image'] ?? '').toString(),
+      rating: (rate['rate'] as num?)?.toDouble() ?? 0.0,
+      reviewCount: (rate['count'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class ApiException implements Exception {
+  final String message;
+  ApiException(this.message);
+}
+
+String errorText(Object e) {
+  if (e is ApiException) return e.message;
+  if (e is TimeoutException) return 'Превышено время ожидания (10 сек)';
+  if (e is FormatException) return 'Сервер вернул некорректные данные';
+  return 'Нет подключения к интернету';
+}
+
+Future<List<CloudProduct>> fetchCloudProducts() async {
+  final res = await http
+      .get(
+    Uri.parse('https://fakestoreapi.com/products'),
+    headers: {'Accept': 'application/json'},
+  )
+      .timeout(const Duration(seconds: 10));
+
+  if (res.statusCode == 200) {
+    final data = jsonDecode(res.body);
+    if (data is! List) throw const FormatException('Expected a list');
+    return data
+        .map((e) => CloudProduct.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+  if (res.statusCode == 404) {
+    throw ApiException('Ресурс не найден (404)');
+  }
+  if (res.statusCode >= 500) {
+    throw ApiException('Ошибка сервера (${res.statusCode})');
+  }
+  throw ApiException('Ошибка запроса (${res.statusCode})');
+}
+
+class CloudCartProvider extends ChangeNotifier {
+  final Map<int, CloudProduct> _items = {};
+
+  int get count => _items.length;
+
+  double get total => _items.values.fold(0.0, (s, p) => s + p.price);
+
+  bool contains(int id) => _items.containsKey(id);
+
+  void toggle(CloudProduct p) {
+    if (_items.remove(p.id) == null) {
+      _items[p.id] = p;
+    }
+    notifyListeners();
+  }
+}
+
+class CloudImage extends StatelessWidget {
+  final String url;
+
+  const CloudImage({super.key, required this.url});
+
+  @override
+  Widget build(BuildContext context) => Image.network(
+    url,
+    fit: BoxFit.contain,
+    errorBuilder: (_, __, ___) => const Center(
+      child: Icon(Icons.broken_image_outlined, color: Colors.grey),
+    ),
+    loadingBuilder: (_, child, progress) => progress == null
+        ? child
+        : const Center(
+      child: SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ),
+    ),
+  );
+}
+
+class CloudProductListScreen extends StatefulWidget {
+  const CloudProductListScreen({super.key});
+
+  @override
+  State<CloudProductListScreen> createState() => _CloudProductListScreenState();
+}
+
+class _CloudProductListScreenState extends State<CloudProductListScreen> {
+  List<CloudProduct> items = [];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load({bool refresh = false}) async {
+    if (!refresh) {
+      setState(() {
+        loading = true;
+        error = null;
+      });
+    }
+
+    try {
+      final data = await fetchCloudProducts();
+      if (!mounted) return;
+      setState(() {
+        items = data;
+        loading = false;
+        error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (refresh && items.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorText(e))),
+        );
+        return;
+      }
+      setState(() {
+        loading = false;
+        error = errorText(e);
+      });
+    }
+  }
+
+  Widget _tile(CloudProduct p) => Material(
+    color: Colors.white,
+    child: InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CloudProductDetailScreen(product: p),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: const Color(0xFFE6E6EE)),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Hero(
+                tag: 'product_image_${p.id}',
+                child: CloudImage(url: p.imageUrl),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    p.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    p.category,
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.star, size: 16, color: Colors.amber),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${p.rating.toStringAsFixed(1)} (${p.reviewCount})',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      const Spacer(),
+                      Text(
+                        usd(p.price),
+                        style: const TextStyle(
+                          color: purple,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.grey),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _body() {
+    if (loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.wifi_off, size: 80, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text(
+                'Что-то пошло не так',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(error!, textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () => load(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry Connection'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => load(refresh: true),
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (_, i) => _tile(items[i]),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Cloud Product Explorer'),
+        actions: [
+          Consumer<CloudCartProvider>(
+            builder: (context, cart, _) => IconButton(
+              tooltip: 'Корзина',
+              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('В корзине: ${cart.count} · ${usd(cart.total)}'),
+                ),
+              ),
+              icon: Badge(
+                isLabelVisible: cart.count > 0,
+                label: Text('${cart.count}'),
+                child: const Icon(Icons.shopping_cart_outlined),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+      body: _body(),
+    );
+  }
+}
+
+class CloudProductDetailScreen extends StatefulWidget {
+  final CloudProduct product;
+
+  const CloudProductDetailScreen({super.key, required this.product});
+
+  @override
+  State<CloudProductDetailScreen> createState() => _CloudProductDetailScreenState();
+}
+
+class _CloudProductDetailScreenState extends State<CloudProductDetailScreen> {
+  final controller = PageController();
+  int page = 0;
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  void _share() {
+    final link = 'narxoz://store/product/${widget.product.id}';
+    final messenger = ScaffoldMessenger.of(context);
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Поделиться товаром',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.product.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.only(left: 12),
+                decoration: BoxDecoration(
+                  color: canvas,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.link, color: purple),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: SelectableText(
+                        link,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Копировать',
+                      icon: const Icon(Icons.copy),
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: link));
+                        if (sheetContext.mounted) Navigator.pop(sheetContext);
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('Ссылка скопирована')),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.product;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Детали товара'),
+        actions: [
+          IconButton(
+            tooltip: 'Поделиться',
+            icon: const Icon(Icons.share),
+            onPressed: _share,
+          ),
+        ],
+      ),
+      body: ListView(
+        children: [
+          SizedBox(
+            height: 340,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.white,
+                    child: PageView.builder(
+                      controller: controller,
+                      itemCount: galleryCount,
+                      onPageChanged: (i) => setState(() => page = i),
+                      itemBuilder: (_, i) => Padding(
+                        padding: const EdgeInsets.all(28),
+                        child: i == 0
+                            ? Hero(
+                          tag: 'product_image_${p.id}',
+                          child: CloudImage(url: p.imageUrl),
+                        )
+                            : CloudImage(url: p.imageUrl),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${page + 1} / $galleryCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 12,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      galleryCount,
+                          (i) => AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        width: i == page ? 24 : 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: i == page ? purple : Colors.black26,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: purple.withAlpha(28),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    p.category.toUpperCase(),
+                    style: const TextStyle(
+                      color: purple,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  p.title,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(Icons.star, size: 20, color: Colors.amber),
+                    const SizedBox(width: 4),
+                    Text('${p.rating.toStringAsFixed(1)} · ${p.reviewCount}'),
+                    const Spacer(),
+                    Text(
+                      usd(p.price),
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: purple,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Описание',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  p.description,
+                  style: const TextStyle(fontSize: 15, height: 1.5),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: Material(
+        elevation: 8,
+        color: Colors.white,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Consumer<CloudCartProvider>(
+              builder: (context, cart, _) {
+                final inCart = cart.contains(p.id);
+
+                return SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton.icon(
+                    onPressed: () => cart.toggle(p),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: inCart ? Colors.green : purple,
+                    ),
+                    icon: Icon(
+                      inCart ? Icons.check : Icons.add_shopping_cart,
+                    ),
+                    label: Text(inCart ? 'В корзине' : 'Add to Cart'),
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ),
