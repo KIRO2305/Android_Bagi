@@ -239,7 +239,6 @@ const List<Product> cartProducts = [
     icon: Icons.keyboard,
     color: Color(0xFFE056FD),
   ),
-"aasa"
   Product(
     id: 5,
     name: 'USB-C Hub',
@@ -2170,8 +2169,9 @@ class _AddMoneyPageState extends State<AddMoneyPage> {
   @override
   void initState() {
     super.initState();
-    category =
-    widget.income ? incomeCategories.first : expenseCategories.first;
+    category = widget.income
+        ? incomeCategories.first
+        : expenseCategories.first;
   }
 
   @override
