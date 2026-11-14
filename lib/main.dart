@@ -6,8 +6,34 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
-void main() {
+// ─────────────────────────────────────────────────────────────
+// LAB 11: ключи SharedPreferences + глобальные notifier'ы
+// ─────────────────────────────────────────────────────────────
+const kDarkModeKey = 'app_theme_dark_mode';
+const kUserNameKey = 'user_display_name';
+const kNotesKey = 'lab11_notes_json';
+
+/// Тема. Заполняется В main() ДО runApp() -> нет мерцания белым экраном.
+final ValueNotifier<bool> darkModeNotifier = ValueNotifier<bool>(false);
+
+/// Имя пользователя. Тоже подгружается до runApp().
+final ValueNotifier<String> userNameNotifier =
+ValueNotifier<String>('Guest User');
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // LAB 11: pre-load настроек до запуска UI
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    darkModeNotifier.value = prefs.getBool(kDarkModeKey) ?? false;
+
+    final savedName = (prefs.getString(kUserNameKey) ?? 'Guest User').trim();
+    userNameNotifier.value = savedName.isEmpty ? 'Guest User' : savedName;
+  } catch (e) {
+    debugPrint('Pre-load error: $e');
+  }
+
   runApp(
     MultiProvider(
       providers: [
@@ -22,23 +48,46 @@ void main() {
 const purple = Color(0xFF6458E8);
 const canvas = Color(0xFFF5F6FA);
 
+// LAB 11: помощники для тёмной темы (в светлой теме цвета те же, что были)
+bool darkOf(BuildContext c) => Theme.of(c).brightness == Brightness.dark;
+Color cardColor(BuildContext c) =>
+    darkOf(c) ? const Color(0xFF1F1F2B) : Colors.white;
+Color softColor(BuildContext c) =>
+    darkOf(c) ? const Color(0xFF2B2B3A) : canvas;
+
 class StudentHubCompleteApp extends StatelessWidget {
   const StudentHubCompleteApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'Student Hub Bagi',
-    debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      useMaterial3: true,
-      scaffoldBackgroundColor: canvas,
-      colorScheme: ColorScheme.fromSeed(seedColor: purple),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: purple,
-        foregroundColor: Colors.white,
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: darkModeNotifier,
+    builder: (context, isDark, _) => MaterialApp(
+      title: 'Student Hub Bagi',
+      debugShowCheckedModeBanner: false,
+      themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
+      theme: ThemeData(
+        useMaterial3: true,
+        scaffoldBackgroundColor: canvas,
+        colorScheme: ColorScheme.fromSeed(seedColor: purple),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: purple,
+          foregroundColor: Colors.white,
+        ),
       ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFF121218),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: purple,
+          brightness: Brightness.dark,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: purple,
+          foregroundColor: Colors.white,
+        ),
+      ),
+      home: const StudentHubHome(),
     ),
-    home: const StudentHubHome(),
   );
 }
 
@@ -150,6 +199,37 @@ class TaskItem {
     id: (m['id'] as num).toInt(),
     title: (m['title'] ?? '').toString(),
     done: m['done'] == true,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// LAB 11: доменная модель NoteItem + JSON сериализация
+// ─────────────────────────────────────────────────────────────
+class NoteItem {
+  final int id;
+  String title;
+  String dateText;
+  bool isCompleted;
+
+  NoteItem({
+    required this.id,
+    required this.title,
+    required this.dateText,
+    this.isCompleted = false,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'dateText': dateText,
+    'isCompleted': isCompleted,
+  };
+
+  factory NoteItem.fromJson(Map<String, dynamic> m) => NoteItem(
+    id: (m['id'] as num).toInt(),
+    title: (m['title'] ?? '').toString(),
+    dateText: (m['dateText'] ?? '').toString(),
+    isCompleted: m['isCompleted'] == true,
   );
 }
 
@@ -529,7 +609,7 @@ class _StudentHubHomeState extends State<StudentHubHome> {
 
   Widget _courseTile(Course c) {
     return Card(
-      color: Colors.white,
+      color: cardColor(context),
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
         contentPadding: const EdgeInsets.all(12),
@@ -632,6 +712,19 @@ class _StudentHubHomeState extends State<StudentHubHome> {
             label: const Text('Cloud Store'),
           ),
         ),
+        const SizedBox(height: 8),
+        // LAB 11: кнопка входа на экран Notes & Settings Vault
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const Lab11VaultPage()),
+            ),
+            icon: const Icon(Icons.storage_outlined),
+            label: const Text('Lab 11 · Notes Vault'),
+          ),
+        ),
         const SizedBox(height: 20),
         const Text(
           'Мои курсы',
@@ -655,7 +748,7 @@ class _StudentHubHomeState extends State<StudentHubHome> {
             .where((c) => enrolled.contains(c.id) && completed.contains(c.id))
             .map(
               (c) => Card(
-            color: Colors.white,
+            color: cardColor(context),
             child: ListTile(
               leading: const Icon(
                 Icons.workspace_premium,
@@ -690,7 +783,7 @@ class _StudentHubHomeState extends State<StudentHubHome> {
           ),
         ...tasks.map(
               (t) => Card(
-            color: Colors.white,
+            color: cardColor(context),
             child: CheckboxListTile(
               value: t.done,
               onChanged: (value) => _update(() {
@@ -874,6 +967,21 @@ class _StudentHubHomeState extends State<StudentHubHome> {
                   );
                 },
               ),
+              // LAB 11: пункт меню
+              ListTile(
+                leading: const Icon(Icons.storage_outlined, color: purple),
+                title: const Text('Notes Vault'),
+                subtitle: const Text('Lab 11 · SharedPreferences, JSON'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const Lab11VaultPage(),
+                    ),
+                  );
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.account_balance_wallet, color: purple),
                 title: const Text('Кошелёк'),
@@ -956,6 +1064,381 @@ class _StudentHubHomeState extends State<StudentHubHome> {
           NavigationDestination(
             icon: Icon(Icons.person_outline),
             label: 'Профиль',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// LAB 11: экран "Offline-First Notes & Settings Vault"
+// ─────────────────────────────────────────────────────────────
+class Lab11VaultPage extends StatefulWidget {
+  const Lab11VaultPage({super.key});
+
+  @override
+  State<Lab11VaultPage> createState() => _Lab11VaultPageState();
+}
+
+class _Lab11VaultPageState extends State<Lab11VaultPage> {
+  final TextEditingController nameCtrl = TextEditingController();
+  final TextEditingController noteCtrl = TextEditingController();
+  final List<NoteItem> notes = [];
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // имя уже загружено в main() -> подставляем сразу
+    nameCtrl.text =
+    userNameNotifier.value == 'Guest User' ? '' : userNameNotifier.value;
+    _loadNotes();
+  }
+
+  @override
+  void dispose() {
+    nameCtrl.dispose();
+    noteCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── READ: JSON string -> List<NoteItem> ──
+  Future<void> _loadNotes() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(kNotesKey);
+
+      if (raw != null && raw.isNotEmpty) {
+        final list = (jsonDecode(raw) as List)
+            .map((v) => NoteItem.fromJson(Map<String, dynamic>.from(v as Map)))
+            .toList();
+        notes
+          ..clear()
+          ..addAll(list);
+      }
+    } catch (e) {
+      debugPrint('Lab11 load: $e');
+    }
+
+    if (mounted) {
+      setState(() => loading = false);
+    }
+  }
+
+  // ── WRITE: List<NoteItem> -> JSON string -> disk ──
+  Future<void> _saveNotes() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(
+        kNotesKey,
+        jsonEncode(notes.map((e) => e.toJson()).toList()),
+      );
+    } catch (e) {
+      debugPrint('Lab11 save: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ошибка сохранения заметок')),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleDark(bool value) async {
+    darkModeNotifier.value = value; // тема меняется мгновенно
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setBool(kDarkModeKey, value);
+    } catch (e) {
+      debugPrint('Lab11 theme save: $e');
+    }
+  }
+
+  Future<void> _saveName() async {
+    final name = nameCtrl.text.trim();
+    FocusScope.of(context).unfocus();
+
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Введите имя')),
+      );
+      return;
+    }
+
+    userNameNotifier.value = name;
+
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(kUserNameKey, name);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Имя сохранено')),
+      );
+    } catch (e) {
+      debugPrint('Lab11 name save: $e');
+    }
+  }
+
+  String _formatDate(DateTime d) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(d.day)}.${two(d.month)}.${d.year} ${two(d.hour)}:${two(d.minute)}';
+  }
+
+  Future<void> _addNote() async {
+    final text = noteCtrl.text.trim();
+    if (text.isEmpty) return;
+
+    final now = DateTime.now();
+
+    setState(() {
+      notes.insert(
+        0, // prepend
+        NoteItem(
+          id: now.microsecondsSinceEpoch,
+          title: text,
+          dateText: _formatDate(now),
+        ),
+      );
+    });
+
+    noteCtrl.clear();
+    await _saveNotes();
+  }
+
+  Future<void> _toggleNote(NoteItem n, bool? value) async {
+    setState(() => n.isCompleted = value ?? false);
+    await _saveNotes();
+  }
+
+  Future<void> _deleteNote(NoteItem n) async {
+    setState(() => notes.removeWhere((e) => e.id == n.id));
+    await _saveNotes();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final doneCount = notes.where((n) => n.isCompleted).length;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Lab 11 · Notes & Settings Vault')),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // ── Header с именем (fallback: Guest User) ──
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: purple,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              children: [
+                const CircleAvatar(
+                  radius: 28,
+                  child: Icon(Icons.person, size: 30),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Добро пожаловать',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 4),
+                      ValueListenableBuilder<String>(
+                        valueListenable: userNameNotifier,
+                        builder: (_, name, __) => Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── 1. Dark mode ──
+          Card(
+            color: cardColor(context),
+            child: ValueListenableBuilder<bool>(
+              valueListenable: darkModeNotifier,
+              builder: (_, isDark, __) => SwitchListTile(
+                secondary: Icon(
+                  isDark ? Icons.dark_mode : Icons.light_mode,
+                  color: purple,
+                ),
+                title: const Text('Dark Mode'),
+                subtitle: Text(
+                  'Ключ: $kDarkModeKey',
+                  style: const TextStyle(fontSize: 11),
+                ),
+                value: isDark,
+                onChanged: _toggleDark,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── 2. Username ──
+          Card(
+            color: cardColor(context),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Профиль',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: nameCtrl,
+                          maxLength: 30,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _saveName(),
+                          decoration: const InputDecoration(
+                            labelText: 'Имя пользователя',
+                            counterText: '',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      FilledButton(
+                        onPressed: _saveName,
+                        child: const Text('Save'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── 3. Notes ──
+          Card(
+            color: cardColor(context),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Заметки',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '$doneCount/${notes.length} выполнено',
+                        style: const TextStyle(
+                          color: purple,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: noteCtrl,
+                          maxLength: 100,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _addNote(),
+                          decoration: const InputDecoration(
+                            hintText: 'Новая заметка',
+                            counterText: '',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      FilledButton.icon(
+                        onPressed: _addNote,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (notes.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: Center(child: Text('Заметок пока нет.')),
+                    ),
+                  ...notes.map(
+                        (n) => Container(
+                      key: ValueKey(n.id),
+                      margin: const EdgeInsets.only(top: 8),
+                      decoration: BoxDecoration(
+                        color: softColor(context),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ListTile(
+                        leading: Checkbox(
+                          value: n.isCompleted,
+                          onChanged: (v) => _toggleNote(n, v),
+                        ),
+                        title: Text(
+                          n.title,
+                          style: TextStyle(
+                            decoration: n.isCompleted
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        subtitle: Text(
+                          n.dateText,
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        trailing: IconButton(
+                          tooltip: 'Удалить',
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => _deleteNote(n),
+                        ),
+                        onTap: () => _toggleNote(n, !n.isCompleted),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Cold Restart Test: добавь 2 заметки, включи Dark Mode, '
+                'полностью закрой приложение и открой снова — всё должно '
+                'восстановиться.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
         ],
       ),
@@ -1057,7 +1540,7 @@ class _CatalogPageState extends State<CatalogPage> {
               prefixIcon: const Icon(Icons.search),
               hintText: 'Поиск курсов',
               filled: true,
-              fillColor: Colors.white,
+              fillColor: cardColor(context),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -1100,7 +1583,7 @@ class _CatalogPageState extends State<CatalogPage> {
   }
 
   Widget _listCard(Course c) => Card(
-    color: Colors.white,
+    color: cardColor(context),
     child: ListTile(
       onTap: () => widget.open(c),
       leading: Container(
@@ -1134,7 +1617,7 @@ class _CatalogPageState extends State<CatalogPage> {
   );
 
   Widget _gridCard(Course c) => Card(
-    color: Colors.white,
+    color: cardColor(context),
     clipBehavior: Clip.antiAlias,
     child: InkWell(
       onTap: () => widget.open(c),
@@ -1224,7 +1707,7 @@ class ProductCard extends StatelessWidget {
         return SizedBox(
           width: 205,
           child: Card(
-            color: Colors.white,
+            color: cardColor(context),
             elevation: 0,
             margin: EdgeInsets.zero,
             child: Padding(
@@ -1384,7 +1867,7 @@ class CartPage extends StatelessWidget {
               const SizedBox(height: 16),
               ...cart.items.map(
                     (product) => Card(
-                  color: Colors.white,
+                  color: cardColor(context),
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(12),
                     leading: Container(
@@ -1800,7 +2283,7 @@ class TasksPage extends StatelessWidget {
             final t = tasks[i];
 
             return Card(
-              color: Colors.white,
+              color: cardColor(context),
               margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               child: ListTile(
                 leading: Checkbox(
@@ -1885,7 +2368,7 @@ class _WalletPageState extends State<WalletPage> {
     child: Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor(context),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -2030,7 +2513,7 @@ class _WalletPageState extends State<WalletPage> {
           ),
           const SizedBox(height: 20),
           Card(
-            color: Colors.white,
+            color: cardColor(context),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -2080,7 +2563,7 @@ class _WalletPageState extends State<WalletPage> {
           if (history.isEmpty) const Text('История пока пуста'),
           ...history.map(
                 (e) => Card(
-              color: Colors.white,
+              color: cardColor(context),
               child: ListTile(
                 leading: CircleAvatar(
                   child: Icon(
@@ -2460,7 +2943,7 @@ class _CloudProductListScreenState extends State<CloudProductListScreen> {
   }
 
   Widget _tile(CloudProduct p) => Material(
-    color: Colors.white,
+    color: cardColor(context),
     child: InkWell(
       onTap: () => Navigator.push(
         context,
@@ -2657,7 +3140,7 @@ class _CloudProductDetailScreenState extends State<CloudProductDetailScreen> {
               Container(
                 padding: const EdgeInsets.only(left: 12),
                 decoration: BoxDecoration(
-                  color: canvas,
+                  color: softColor(sheetContext),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -2843,7 +3326,7 @@ class _CloudProductDetailScreenState extends State<CloudProductDetailScreen> {
       ),
       bottomNavigationBar: Material(
         elevation: 8,
-        color: Colors.white,
+        color: cardColor(context),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(12),
